@@ -16,6 +16,7 @@ license=('GPL3')
 conflicts=('signal-desktop-beta-bin')
 arch=('x86_64' 'aarch64')
 url="https://signal.org"
+install=$pkgname.install
 depends=(
   'gcc-libs'
   'glibc'
@@ -57,9 +58,11 @@ makedepends_aarch64=('fpm')
 source=(
   "${pkgname}-${pkgver}.tar.gz::https://github.com/signalapp/${_pkgname}/archive/v${pkgver//beta*}-beta.${pkgver##*beta}.tar.gz"
   "${_desktop_file}"
+  ${pkgname}.sh
   )
 sha512sums=('d998bd092ff7516e189a51125fbc97ca1d9974787a6d5e761c038d9551106b0364cb1b2cc3e2a96345fff7903ec864e25f88b4003fb7ddcbb54b70a872b729a8'
-            '5032201efb1089e2e8f78cf5cc06d458f2b068900a4de74b7c2ef87a0a0e7779cc681df7b95ce2d9af131ef9ea148f3621ee1fa2a9812982cdecc7aba9eeb87c')
+            '5032201efb1089e2e8f78cf5cc06d458f2b068900a4de74b7c2ef87a0a0e7779cc681df7b95ce2d9af131ef9ea148f3621ee1fa2a9812982cdecc7aba9eeb87c'
+            'b3d8e56d0524711e13f5ef3770b49c5723ad3d7e50855ae578ea63f653b5e64edd7a9e68b56ba35c0240959f091195ece3580fc8550240ef40b00d0ad7fb97e8')
 
 prepare() {
   cd "${_pkgname}-${pkgver//beta*}-beta.${pkgver##*beta}"
@@ -101,7 +104,8 @@ package() {
   esac
   cp -a release/${folder} "${pkgdir}/usr/lib/${pkgname}"
 
-  ln -s "/usr/lib/${pkgname}/${pkgname}" "${pkgdir}/usr/bin/"
+  # Launcher
+  install -Dm755 "${srcdir}/${pkgname}.sh" "${pkgdir}/usr/bin/${pkgname}"
 
   chmod u+s "${pkgdir}/usr/lib/${pkgname}/chrome-sandbox"
 
