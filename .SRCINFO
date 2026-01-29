@@ -5,6 +5,7 @@ pkgbase = zotero
 	url = https://github.com/zotero/zotero
 	arch = x86_64
 	arch = i686
+	arch = aarch64
 	license = AGPL-3.0-or-later
 	makedepends = npm
 	makedepends = git
