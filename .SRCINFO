@@ -3,7 +3,6 @@ pkgbase = async-profiler
 	pkgver = 4.2.1
 	pkgrel = 1
 	url = https://github.com/async-profiler/async-profiler
-	install = async-profiler.install
 	arch = x86_64
 	groups = async-profiler
 	license = Apache
