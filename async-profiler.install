@@ -1,11 +1,11 @@
 ## arg 1:  the new package version
 post_install() {
-  ln -s /opt/async-profiler/build /usr/local/bin/build
-  ln -s /opt/async-profiler/profiler.sh /usr/local/bin/async-profiler
+  ln -s /opt/async-profiler/bin/asprof /usr/local/bin/asprof
+  ln -s /opt/async-profiler/bin/jfrconv /usr/local/bin/jfrconv
 }
 
 ## arg 1:  the old package version
 pre_remove() {
-  rm /usr/local/bin/async-profiler
-  rm /usr/local/bin/build
+  rm /usr/local/bin/asprof
+  rm /usr/local/bin/jfrconv
 }
