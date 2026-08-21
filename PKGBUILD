@@ -5,75 +5,122 @@
 # Contributor: dpeukert
 
 pkgname=marktext
-pkgver=0.17.1
-pkgrel=4
+_upstream_ver=0.19.1
+pkgver=${_upstream_ver/-rc./rc}
+pkgrel=1
 pkgdesc='A simple and elegant open-source markdown editor that focused on speed and usability'
-arch=(x86_64)
+arch=(x86_64 aarch64)
 url=https://www.marktext.cc
 _url="https://github.com/$pkgname/$pkgname"
 license=(MIT)
-_electron=electron15
+_electron=electron42
 depends=("$_electron"
          libxkbfile
          libsecret
          openssl
          ripgrep)
-makedepends=(jq
-             git
-             nodejs-lts-hydrogen
-             npm
-             node-gyp
-             moreutils
-             yarn
-             yq)
-_archive="$pkgname-$pkgver"
-source=("$_url/archive/v$pkgver/$_archive.tar.gz"
+makedepends=(nodejs
+             pnpm
+             python)
+_archive="$pkgname-$_upstream_ver"
+source=("$_archive.tar.gz::$_url/archive/refs/tags/v$_upstream_ver.tar.gz"
         "$pkgname.sh"
         "$pkgname-arg-handling.patch")
-sha256sums=('d94433ee167cd2fcddd5ccbffd3e17f2933f7dee1e2346f3a6aaa2e8d9052581'
-            '8f37f164a642a536b75f54b49e7c7a7c1e4d355a91dd8ece4cab6a95b42d369e'
-            'c754a1cad52d10a38eeddb9293ce0a4540296c6adbb47eb5311eaaeded150a01')
+sha256sums=('beefcd0ed003cd97c377331df82517d5f3afd3dd12ef9378c53bc886ca08cff9'
+            '5214b3326020467879aab65d5138591a578e4e69bc46b4427964641ffbd9c8ca'
+            '7ee21967b63976a582bc585ad8680573494fd14070885161540badb8f6e16ecc')
 
 prepare() {
-	local _electronDist=$(dirname $(realpath $(which $_electron)))
-	local _electronVersion=$($_electron --version | sed -e 's/^v//')
 	cd "$_archive"
-	jq 'del(.devDependencies["electron"], .scripts["preinstall", "postinstall"])' \
-		package.json | sponge package.json
-	yq -y ". + {\"electronDist\": \"$_electronDist\", \"electronVersion\": \"$_electronVersion\"}" \
-		electron-builder.yml | sponge electron-builder.yml
-	mkdir -p "$srcdir/node_modules"
-	yarn --cache-folder "$srcdir/node_modules" install --frozen-lockfile
-	yarn --cache-folder "$srcdir/node_modules" add -D --no-lockfile --ignore-scripts electron@$_electronVersion
-	patch -p1 < "$srcdir/$pkgname-arg-handling.patch"
+	patch -Np1 -i "$srcdir/$pkgname-arg-handling.patch"
+	grep -q '^pmOnFail:' pnpm-workspace.yaml ||
+		sed -i '1i pmOnFail: ignore' pnpm-workspace.yaml
+	grep -q '^overrides:' pnpm-workspace.yaml ||
+		sed -i '1i shamefullyHoist: true\noverrides:\n  postcss: 8.5.15' \
+			pnpm-workspace.yaml
+
+	# A shared Electron derives resourcesPath from its own installation rather
+	# than from this application. Let the launcher point MarkText at its own
+	# extra resources without changing bundled-Electron behavior upstream.
+	sed -i \
+		's/process\.resourcesPath/(process.env.MARKTEXT_RESOURCES_PATH || process.resourcesPath)/g' \
+		packages/desktop/src/common/filesystem/paths.ts \
+		packages/desktop/src/common/i18n.ts \
+		packages/desktop/src/main/globalSetting.ts \
+		packages/desktop/src/main/ipc/bootInfo.ts \
+		packages/desktop/src/main/menu/templates/help.ts
+
+	# Upstream's postinstall downloads its own bundled Electron. Install the
+	# dependencies without lifecycle scripts and rebuild only the native modules
+	# against the selected Arch system Electron instead.
+	CI=true pnpm install --frozen-lockfile --ignore-scripts \
+		--store-dir "$srcdir/pnpm-store"
+	(
+		cd packages/desktop
+		./node_modules/.bin/patch-package
+		./node_modules/.bin/electron-rebuild \
+			-f -v "$(<"/usr/lib/$_electron/version")"
+	)
+	./node_modules/.bin/tsx scripts/minify-locales.ts
 }
 
 build() {
+	local _electron_arch
+	case "$CARCH" in
+		x86_64) _electron_arch=x64 ;;
+		aarch64) _electron_arch=arm64 ;;
+		*) error "Unsupported architecture: $CARCH"; return 1 ;;
+	esac
+
 	cd "$_archive"
-	yarn --cache-folder "$srcdir/node_modules" run \
-		electron-rebuild
-	node .electron-vue/build.js
-	yarn --cache-folder "$srcdir/node_modules" run \
-		electron-builder --linux --x64 --dir
+	(
+		cd packages/desktop
+		./node_modules/.bin/electron-vite build
+		npm_config_user_agent=pnpm ./node_modules/.bin/electron-builder \
+			--linux "--$_electron_arch" --dir \
+			--config.electronDist="/usr/lib/$_electron" \
+			--config.electronVersion="$(<"/usr/lib/$_electron/version")"
+	)
 	sed -e "s/@ELECTRON@/$_electron/" "../$pkgname.sh" > "$pkgname"
 }
 
 package() {
+	local _unpacked _rg_package
+	case "$CARCH" in
+		x86_64)
+			_unpacked=linux-unpacked
+			_rg_package=ripgrep-linux-x64
+			;;
+		aarch64)
+			_unpacked=linux-arm64-unpacked
+			_rg_package=ripgrep-linux-arm64
+			;;
+		*) error "Unsupported architecture: $CARCH"; return 1 ;;
+	esac
+
 	cd "$_archive"
 	install -Dm0755 -t "$pkgdir/usr/bin/" "$pkgname"
-	local _dist=build/linux-unpacked/resources
-	install -Dm0644 -t "$pkgdir/usr/lib/$pkgname/" "$_dist/app.asar"
-	cp -a "$_dist"/{app.asar.unpacked,hunspell_dictionaries} "$pkgdir/usr/lib/$pkgname/"
-	local _rg_path="$pkgdir/usr/lib/$pkgname/app.asar.unpacked/node_modules/vscode-ripgrep/bin/"
-	mkdir -p $_rg_path
-	ln -sf /usr/bin/rg "$_rg_path"
-	install -Dm0755 -t "$pkgdir/usr/share/applications/" "resources/linux/$pkgname.desktop"
-	install -Dm0755 -t "$pkgdir/usr/share/metainfo/" "resources/linux/$pkgname.appdata.xml"
-	install -Dm0644 resources/icons/icon.png "$pkgdir/usr/share/pixmaps/$pkgname.png"
+	install -d "$pkgdir/usr/lib/$pkgname"
+	cp -a "dist/$_unpacked/resources/." "$pkgdir/usr/lib/$pkgname/"
+
+	local _rg_path="$pkgdir/usr/lib/$pkgname/app.asar.unpacked/node_modules/@vscode/$_rg_package/bin"
+	ln -sf /usr/bin/rg "$_rg_path/rg"
+
+	local _desktop=packages/desktop
+	install -Dm0644 -t "$pkgdir/usr/share/applications/" \
+		"$_desktop/build/linux/$pkgname.desktop"
+	install -Dm0644 -t "$pkgdir/usr/share/metainfo/" \
+		"$_desktop/build/linux/$pkgname.appdata.xml"
+	install -Dm0644 "$_desktop/build/icons/512x512/$pkgname.png" \
+		"$pkgdir/usr/share/pixmaps/$pkgname.png"
+	local _size
+	for _size in 16 24 32 48 64 128 256 512; do
+		install -Dm0644 "$_desktop/build/icons/${_size}x${_size}/$pkgname.png" \
+			"$pkgdir/usr/share/icons/hicolor/${_size}x${_size}/apps/$pkgname.png"
+	done
+
 	install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" LICENSE
-	install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" README.md CONTRIBUTING.md
+	install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" \
+		README.md .github/CONTRIBUTING.md
 	cp -a docs "$pkgdir/usr/share/doc/$pkgname/"
-	pushd "resources/icons"
-	find -name maktext.png -exec \
-		install -Dm0644 {} "$pkgdir/usr/share/icons/hicolor/{}" \;
 }
