@@ -5,7 +5,7 @@
 # Contributor: dpeukert
 
 pkgname=marktext
-_upstream_ver=0.19.1
+_upstream_ver=0.20.0-rc.1
 pkgver=${_upstream_ver/-rc./rc}
 pkgrel=1
 pkgdesc='A simple and elegant open-source markdown editor that focused on speed and usability'
@@ -26,7 +26,7 @@ _archive="$pkgname-$_upstream_ver"
 source=("$_archive.tar.gz::$_url/archive/refs/tags/v$_upstream_ver.tar.gz"
         "$pkgname.sh"
         "$pkgname-arg-handling.patch")
-sha256sums=('beefcd0ed003cd97c377331df82517d5f3afd3dd12ef9378c53bc886ca08cff9'
+sha256sums=('6495adc035ba9fd8ef4f992605cc16b2f15f52d5d7a1c6095fe2c6d9694ab192'
             '5214b3326020467879aab65d5138591a578e4e69bc46b4427964641ffbd9c8ca'
             '7ee21967b63976a582bc585ad8680573494fd14070885161540badb8f6e16ecc')
 
@@ -36,7 +36,7 @@ prepare() {
 	grep -q '^pmOnFail:' pnpm-workspace.yaml ||
 		sed -i '1i pmOnFail: ignore' pnpm-workspace.yaml
 	grep -q '^overrides:' pnpm-workspace.yaml ||
-		sed -i '1i shamefullyHoist: true\noverrides:\n  postcss: 8.5.15' \
+		sed -i '1i shamefullyHoist: true\noverrides:\n  postcss: 8.5.15\n  esbuild@>=0.27.0 <0.28.1: 0.28.1' \
 			pnpm-workspace.yaml
 
 	# A shared Electron derives resourcesPath from its own installation rather
