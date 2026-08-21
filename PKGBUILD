@@ -5,7 +5,7 @@
 # Contributor: dpeukert
 
 pkgname=marktext
-_upstream_ver=0.19.1
+_upstream_ver=0.20.0
 pkgver=${_upstream_ver/-rc./rc}
 pkgrel=1
 pkgdesc='A simple and elegant open-source markdown editor that focused on speed and usability'
@@ -26,26 +26,23 @@ _archive="$pkgname-$_upstream_ver"
 source=("$_archive.tar.gz::$_url/archive/refs/tags/v$_upstream_ver.tar.gz"
         "$pkgname.sh"
         "$pkgname-arg-handling.patch")
-sha256sums=('beefcd0ed003cd97c377331df82517d5f3afd3dd12ef9378c53bc886ca08cff9'
+sha256sums=('9a052868129560e46de583c37f793d250241fab05c120ea0b84e6b195a4d5400'
             '5214b3326020467879aab65d5138591a578e4e69bc46b4427964641ffbd9c8ca'
-            '7ee21967b63976a582bc585ad8680573494fd14070885161540badb8f6e16ecc')
+            '157515b9d56997c0556b03d7b2a5f14c42bf5187ef775dee00ab5e40a0043d31')
 
 prepare() {
 	cd "$_archive"
 	patch -Np1 -i "$srcdir/$pkgname-arg-handling.patch"
 	grep -q '^pmOnFail:' pnpm-workspace.yaml ||
 		sed -i '1i pmOnFail: ignore' pnpm-workspace.yaml
-	grep -q '^overrides:' pnpm-workspace.yaml ||
-		sed -i '1i shamefullyHoist: true\noverrides:\n  postcss: 8.5.15' \
-			pnpm-workspace.yaml
+	grep -q '^shamefullyHoist:' pnpm-workspace.yaml ||
+		sed -i '1i shamefullyHoist: true' pnpm-workspace.yaml
 
 	# A shared Electron derives resourcesPath from its own installation rather
 	# than from this application. Let the launcher point MarkText at its own
 	# extra resources without changing bundled-Electron behavior upstream.
 	sed -i \
 		's/process\.resourcesPath/(process.env.MARKTEXT_RESOURCES_PATH || process.resourcesPath)/g' \
-		packages/desktop/src/common/filesystem/paths.ts \
-		packages/desktop/src/common/i18n.ts \
 		packages/desktop/src/main/globalSetting.ts \
 		packages/desktop/src/main/ipc/bootInfo.ts \
 		packages/desktop/src/main/menu/templates/help.ts
